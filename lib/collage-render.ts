@@ -7,7 +7,9 @@
 
 export type Style = "scrapbook" | "grid" | "strip";
 export type Format = "post" | "story";
-export type Pic = { img: CanvasImageSource; width: number; height: number; caption: string | null };
+export type Pic = { img: CanvasImageSource; width: number; height: number; caption: string | null; pen: Pen; ink: Ink; doodle: Doodle | null };
+
+import { PENS, inkColor, strokePath, type Doodle, type Ink, type Pen } from "./pens";
 
 const PAPER = "#f3eee4";
 const PRINT = "#fffdf9";
@@ -22,7 +24,8 @@ export type RenderOpts = {
   title: string;
   subtitle: string;
   seed: number;
-  hand: string; // CSS font-family for the handwriting font
+  hand: string; // CSS font-family for the handwriting font (titles)
+  pens: Record<Pen, string>; // CSS font-family for each caption pen
   sans: string;
 };
 
@@ -63,12 +66,29 @@ function rng(seed: number) {
   };
 }
 
-/** Fill a box with the photo, cropping the overflow from the centre (like object-fit: cover). */
+/** Fill a box with the photo, cropping the overflow from the centre (like object-fit: cover), drawing included. */
 function cover(ctx: CanvasRenderingContext2D, p: Pic, x: number, y: number, bw: number, bh: number) {
   const s = Math.max(bw / p.width, bh / p.height);
   const sw = bw / s;
   const sh = bh / s;
   ctx.drawImage(p.img, (p.width - sw) / 2, (p.height - sh) / 2, sw, sh, x, y, bw, bh);
+  if (!p.doodle?.strokes?.length) return;
+  // the drawing is stored against the whole photo, so lay it out at full size and crop the same way
+  const W = p.width * s;
+  const H = p.height * s;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, bw, bh);
+  ctx.clip();
+  ctx.translate(x - (W - bw) / 2, y - (H - bh) / 2);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const st of p.doodle.strokes) {
+    ctx.strokeStyle = st.c;
+    ctx.lineWidth = st.w * W;
+    ctx.stroke(new Path2D(strokePath(st, W, H)));
+  }
+  ctx.restore();
 }
 
 function paper(ctx: CanvasRenderingContext2D, w: number, h: number, dots = true) {
@@ -142,11 +162,11 @@ function drawScrapbook(ctx: CanvasRenderingContext2D, w: number, h: number, o: R
     const cx = ax + rowOffset + cw * (col + 0.5) + (rand() - 0.5) * cw * 0.12;
     const cy = ay + ch * (r + 0.5) + (rand() - 0.5) * ch * 0.08;
     const angle = ((rand() - 0.5) * 12 * Math.PI) / 180;
-    drawPrint(ctx, p, cx, cy, pw, angle, o.hand, rand() < 0.45 ? (rand() - 0.5) * 0.5 : null);
+    drawPrint(ctx, p, cx, cy, pw, angle, o.pens, rand() < 0.45 ? (rand() - 0.5) * 0.5 : null);
   }
 }
 
-function drawPrint(ctx: CanvasRenderingContext2D, p: Pic, cx: number, cy: number, pw: number, angle: number, hand: string, tapeAngle: number | null) {
+function drawPrint(ctx: CanvasRenderingContext2D, p: Pic, cx: number, cy: number, pw: number, angle: number, pens: Record<Pen, string>, tapeAngle: number | null) {
   const pad = pw * 0.05;
   const iw = pw - pad * 2;
   const ih = iw * 1.25;
@@ -163,8 +183,8 @@ function drawPrint(ctx: CanvasRenderingContext2D, p: Pic, cx: number, cy: number
   ctx.shadowColor = "transparent";
   cover(ctx, p, -pw / 2 + pad, -ph / 2 + pad, iw, ih);
   if (p.caption) {
-    ctx.fillStyle = INK;
-    ctx.font = `500 ${Math.round(pw * 0.085)}px ${hand}`;
+    ctx.fillStyle = inkColor(p.pen, p.ink);
+    ctx.font = `${p.pen === "pen" ? 500 : 400} ${Math.round(pw * 0.085 * PENS[p.pen].scale)}px ${pens[p.pen]}`;
     ctx.textBaseline = "middle";
     ctx.fillText(fitText(ctx, p.caption, iw - pad), -pw / 2 + pad * 1.6, -ph / 2 + pad + ih + foot * 0.52);
   }

@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { longDate, shortDate } from "@/lib/dates";
 import { signUrls } from "@/lib/photos";
 import type { Person, Photo } from "@/lib/types";
-import { IconClose, IconDownload, IconMore, IconPen, IconShare, IconStar, IconTrash } from "./icons";
+import { inkOf, penOf } from "@/lib/pens";
+import { IconClose, IconDownload, IconMore, IconPen, IconScribble, IconShare, IconStar, IconTrash } from "./icons";
+import { Caption, DoodleLayer } from "./pen";
 import { useSigned } from "./photo-img";
 import { ActionSheet, Avatar, cx, useToast, type MenuItem } from "./ui";
 
@@ -23,6 +25,9 @@ type Props = {
   onDelete: (p: Photo) => void;
   onEditCaption: (p: Photo) => void;
   onMakeCover: (p: Photo) => void;
+  onDraw: (p: Photo) => void;
+  /** something is open on top (drawing, caption): ignore the arrow and escape keys */
+  paused?: boolean;
 };
 
 /** Full-screen photos. Swipe sideways to flip through, swipe down (or tap ×) to close. */
@@ -69,7 +74,7 @@ export function Viewer(props: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (menu) return;
+      if (menu || props.paused) return;
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowRight") go(index + 1);
       if (e.key === "ArrowLeft") go(index - 1);
@@ -139,7 +144,8 @@ export function Viewer(props: Props) {
   const by = photo.user_id ? people[photo.user_id] : undefined;
   const mine = photo.user_id === meId;
   const items: MenuItem[] = [
-    { label: photo.caption ? "Edit caption" : "Add a caption", icon: <IconPen size={20} />, onClick: () => props.onEditCaption(photo), hidden: !mine },
+    { label: photo.caption ? "Edit caption" : "Add a caption", icon: <IconPen size={20} />, onClick: () => props.onEditCaption(photo), hidden: !mine, hint: "Pick the marker too" },
+    { label: photo.doodle ? "Edit the drawing" : "Draw on it", icon: <IconScribble size={20} />, onClick: () => props.onDraw(photo), hint: "Anyone on the board can" },
     { label: coverId === photo.id ? "This is the cover" : "Make it the cover", icon: <IconStar size={20} />, onClick: () => props.onMakeCover(photo), hint: "Shows on the board in your list" },
     { label: "Save to phone", icon: <IconDownload size={20} />, onClick: share },
     { label: "Delete photo", icon: <IconTrash size={20} />, onClick: () => props.onDelete(photo), danger: true, hidden: !(mine || isOwner) },
@@ -199,7 +205,11 @@ export function Viewer(props: Props) {
       >
         <div className="pointer-events-auto mx-auto flex max-w-2xl items-end gap-3 px-5">
           <div className="min-w-0 flex-1">
-            {photo.caption ? <p className="font-hand mb-1.5 text-[26px] leading-[1.1] text-white">{photo.caption}</p> : null}
+            {photo.caption ? (
+              <p className="mb-1.5 leading-[1.1]">
+                <Caption text={photo.caption} pen={penOf(photo)} ink={inkOf(photo)} size={26} light />
+              </p>
+            ) : null}
             <div className="flex items-center gap-2 text-[13px] text-white/75">
               {by ? <Avatar person={by} size={20} /> : null}
               <span className="truncate">
@@ -208,6 +218,15 @@ export function Viewer(props: Props) {
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => props.onDraw(photo)}
+            aria-label="Draw on it"
+            title="Draw on it"
+            className="mb-[-6px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 active:bg-white/20"
+          >
+            <IconScribble />
+          </button>
           <button type="button" onClick={share} aria-label="Share" className="mb-[-6px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 active:bg-white/20">
             <IconShare />
           </button>
@@ -254,15 +273,17 @@ function Slide({ photo, thumb, full, dragY, onBlob }: { photo: Photo; thumb?: st
     : { transition: "transform 0.25s ease-out" };
   return (
     <div className="absolute inset-0 flex items-center justify-center" style={style}>
-      <div className="relative h-full w-full">
+      {/* sized to the photo's own shape so a drawing lines up exactly on top */}
+      <div className="relative" style={{ aspectRatio: `${photo.width} / ${photo.height}`, width: `min(100vw, calc(100dvh * ${photo.width / photo.height}))` }}>
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumb} alt="" crossOrigin="anonymous" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+          <img src={thumb} alt="" crossOrigin="anonymous" className="absolute inset-0 h-full w-full" draggable={false} />
         ) : null}
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={photo.caption ?? ""} className="animate-fade absolute inset-0 h-full w-full object-contain" draggable={false} />
+          <img src={src} alt={photo.caption ?? ""} className="animate-fade absolute inset-0 h-full w-full" draggable={false} />
         ) : null}
+        <DoodleLayer doodle={photo.doodle} width={photo.width} height={photo.height} />
       </div>
     </div>
   );

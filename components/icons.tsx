@@ -140,3 +140,8 @@ export const IconImage = ({ size, ...p }: P) => (
     <circle cx="15.5" cy="9" r="1.5" />
   </svg>
 );
+export const IconScribble = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M3.5 17c2.5-6 5-9 6.5-8.5 2 .7-2.5 7.5-.5 8.2 1.8.6 4-6.4 6.2-5.8 1.6.4-.6 4.6.8 5.2 1 .4 2.3-1 4-3" />
+  </svg>
+);

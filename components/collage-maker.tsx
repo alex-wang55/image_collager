@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canvasSize, renderCollage, type Format, type Pic, type Style } from "@/lib/collage-render";
+import { PENS, inkOf, penOf, type Pen } from "@/lib/pens";
 import { signUrls } from "@/lib/photos";
 import type { Photo } from "@/lib/types";
 import { IconBack, IconCheck, IconClose, IconDownload, IconShuffle } from "./icons";
@@ -25,7 +26,7 @@ export function CollageMaker({ open, onClose, photos, title, subtitle }: { open:
   const [seed, setSeed] = useState(1);
   const [out, setOut] = useState<{ blob: Blob; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const bitmaps = useRef(new Map<string, Pic>());
+  const bitmaps = useRef(new Map<string, Pick<Pic, "img" | "width" | "height">>());
   const fontRef = useRef<HTMLSpanElement>(null);
 
   // start with the latest few picked so "make" works in one tap
@@ -57,21 +58,29 @@ export function CollageMaker({ open, onClose, photos, title, subtitle }: { open:
           need.map(async (p) => {
             const res = await fetch(urls[p.path], { mode: "cors" });
             const img = await createImageBitmap(await res.blob());
-            bitmaps.current.set(p.id, { img, width: img.width, height: img.height, caption: p.caption });
+            bitmaps.current.set(p.id, { img, width: img.width, height: img.height });
           }),
         );
       }
-      const hand = fontRef.current ? getComputedStyle(fontRef.current).fontFamily : "cursive";
-      await document.fonts.load(`700 40px ${hand}`).catch(() => {});
+      // the canvas needs the same fonts the app uses, loaded, for the title and each caption pen
+      const family = (pen: Pen) => {
+        const el = fontRef.current?.querySelector(`[data-pen="${pen}"]`);
+        return el ? getComputedStyle(el).fontFamily : "cursive";
+      };
+      const pens = Object.fromEntries((Object.keys(PENS) as Pen[]).map((k) => [k, family(k)])) as Record<Pen, string>;
+      const used = new Set<Pen>(["pen", ...chosen.filter((p) => p.caption).map(penOf)]);
+      await Promise.all([...used].map((k) => document.fonts.load(`400 40px ${pens[k]}`).catch(() => {})));
+      await document.fonts.load(`700 40px ${pens.pen}`).catch(() => {});
       const sans = getComputedStyle(document.body).fontFamily;
       const blob = await renderCollage({
-        pics: chosen.map((p) => bitmaps.current.get(p.id)!),
+        pics: chosen.map((p) => ({ ...bitmaps.current.get(p.id)!, caption: p.caption, pen: penOf(p), ink: inkOf(p), doodle: p.doodle })),
         style,
         format,
         title,
         subtitle,
         seed,
-        hand,
+        hand: pens.pen,
+        pens,
         sans,
       });
       if (!alive) return;
@@ -121,9 +130,13 @@ export function CollageMaker({ open, onClose, photos, title, subtitle }: { open:
 
   return (
     <Sheet open={open} onClose={onClose} label="Make a collage" className="sm:max-w-xl">
-      {/* hidden probe so we can hand the canvas the same handwriting font the app uses */}
-      <span ref={fontRef} className="font-hand pointer-events-none absolute opacity-0" aria-hidden="true">
-        a
+      {/* hidden probes so we can hand the canvas the same fonts the app uses */}
+      <span ref={fontRef} className="pointer-events-none absolute opacity-0" aria-hidden="true">
+        {(Object.keys(PENS) as Pen[]).map((k) => (
+          <span key={k} data-pen={k} className={PENS[k].cls}>
+            a
+          </span>
+        ))}
       </span>
       <div className="flex items-center gap-1 px-3 pb-1 pt-3">
         {step === "make" ? (

@@ -9,7 +9,8 @@ Installs to your home screen (Safari: Share → Add to Home Screen) and opens fu
 ## What it does
 
 - Boards you share with an invite link. Everyone on a board can add photos; new ones from friends show up live.
-- Camera button opens the phone camera directly; Library adds a batch from the camera roll. Write a caption on the bottom of each print before it uploads.
+- Camera button opens the phone camera directly; Library adds a batch from the camera roll. Write a caption on the bottom of each print before it uploads, in a pen of your choice (felt-tip marker, pen, pencil or typewriter, in four inks).
+- Draw on any photo with your finger, before uploading or later from the viewer. Anyone on the board can doodle on anyone's photo; drawings are stored as strokes relative to the photo, so they line up at every size and carry into exported collages.
 - Two views: the collage (newest on top, tilted prints with tape) and a by-date timeline, month by month, using each photo's original EXIF date.
 - Full-screen viewer: swipe between photos, swipe down to close, save or share the full-size file.
 - The home screen resurfaces an old photo ("On this day, 2025" or "From 3 months ago") and marks boards with new photos from friends.

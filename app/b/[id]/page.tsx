@@ -6,6 +6,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useAuth } from "@/components/auth";
 import { Collage } from "@/components/collage";
 import { CollageMaker } from "@/components/collage-maker";
+import { DoodleEditor } from "@/components/doodle-editor";
+import { CaptionSheet } from "@/components/pen";
 import { Compose } from "@/components/compose";
 import { IconBack, IconCamera, IconCollage, IconGrid, IconImage, IconInvite, IconLeave, IconMore, IconPen, IconPhotos, IconTrash } from "@/components/icons";
 import { InviteSheet } from "@/components/invite";
@@ -15,7 +17,8 @@ import { useUploads } from "@/components/uploads";
 import { Viewer } from "@/components/viewer";
 import { ActionSheet, AvatarStack, Button, IconButton, PageLoader, cx, namesLabel, useConfirm, usePrompt, useToast } from "@/components/ui";
 import { spanLabel } from "@/lib/dates";
-import { deletePhotos, fetchPhotos, sortPhotos, type Order, PAGE } from "@/lib/photos";
+import { deletePhotos, fetchPhotos, signUrls, sortPhotos, type Order, PAGE } from "@/lib/photos";
+import { inkOf, lastPen, penOf, type Doodle, type Ink, type Pen } from "@/lib/pens";
 import { errMsg, supabase } from "@/lib/supabase";
 import type { Board, Member, Person, Photo } from "@/lib/types";
 
@@ -56,6 +59,8 @@ function BoardScreen() {
   const [menu, setMenu] = useState(false);
   const [invite, setInvite] = useState(false);
   const [maker, setMaker] = useState(false);
+  const [captionFor, setCaptionFor] = useState<Photo | null>(null);
+  const [drawFor, setDrawFor] = useState<{ photo: Photo; src: string } | null>(null);
   const [solo, setSolo] = useState<Photo | null>(null); // a deep-linked photo that isn't loaded yet
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
@@ -302,13 +307,26 @@ function BoardScreen() {
     }
   }
 
-  async function editCaption(p: Photo) {
-    const text = await prompt({ title: p.caption ? "Edit caption" : "Add a caption", value: p.caption ?? "", placeholder: "write something...", maxLength: 280, hand: true });
-    if (text === null) return;
+  async function saveCaption(p: Photo, text: string, pen: Pen, ink: Ink) {
     const caption = text.trim() || null;
-    const { error } = await supabase.from("collage_photos").update({ caption }).eq("id", p.id);
+    const patch = { caption, caption_pen: caption ? pen : null, caption_ink: caption ? ink : null };
+    const { error } = await supabase.from("collage_photos").update(patch).eq("id", p.id);
     if (error) return toast(errMsg(error), "err");
-    patchPhoto({ id: p.id, caption });
+    patchPhoto({ id: p.id, ...patch });
+    setCaptionFor(null);
+  }
+
+  async function openDrawing(p: Photo) {
+    const urls = await signUrls([p.path]);
+    if (!urls[p.path]) return toast("Couldn't load that photo. Check your connection.", "err");
+    setDrawFor({ photo: p, src: urls[p.path] });
+  }
+
+  async function saveDrawing(p: Photo, doodle: Doodle | null) {
+    const { error } = await supabase.rpc("collage_set_doodle", { p_photo: p.id, p_doodle: doodle });
+    if (error) return toast(errMsg(error), "err");
+    patchPhoto({ id: p.id, doodle });
+    setDrawFor(null);
   }
 
   async function makeCover(p: Photo) {
@@ -509,8 +527,32 @@ function BoardScreen() {
               boardName={board.name}
               coverId={board.cover_photo_id}
               onDelete={deletePhoto}
-              onEditCaption={editCaption}
+              onEditCaption={setCaptionFor}
               onMakeCover={makeCover}
+              onDraw={openDrawing}
+              paused={!!drawFor || !!captionFor}
+            />
+          ) : null}
+
+          <CaptionSheet
+            open={!!captionFor}
+            initial={
+              captionFor?.caption
+                ? { text: captionFor.caption, pen: penOf(captionFor), ink: inkOf(captionFor) }
+                : { text: "", ...lastPen() }
+            }
+            onClose={() => setCaptionFor(null)}
+            onSave={(text, pen, ink) => (captionFor ? saveCaption(captionFor, text, pen, ink) : undefined)}
+          />
+
+          {drawFor ? (
+            <DoodleEditor
+              src={drawFor.src}
+              width={drawFor.photo.width}
+              height={drawFor.photo.height}
+              initial={drawFor.photo.doodle}
+              onCancel={() => setDrawFor(null)}
+              onSave={(d) => saveDrawing(drawFor.photo, d)}
             />
           ) : null}
         </>

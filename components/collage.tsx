@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { layoutColumns, printStyle } from "@/lib/masonry";
+import { inkOf, penOf, type Doodle, type Ink, type Pen } from "@/lib/pens";
+import { Caption, DoodleLayer } from "./pen";
 import type { Person, Photo } from "@/lib/types";
 import { PhotoImg, useSigned } from "./photo-img";
 import type { Pending } from "./uploads";
@@ -84,9 +86,33 @@ export function Collage({
         <div key={ci} className="flex min-w-0 flex-1 flex-col" style={{ gap: GAP + 4 }}>
           {col.map((it) =>
             it.kind === "photo" ? (
-              <Print key={it.id} id={it.id} width={it.width} height={it.height} caption={it.photo.caption} color={it.photo.color} by={it.photo.user_id ? people[it.photo.user_id] : undefined} src={urls[it.photo.thumb_path]} onClick={() => onOpen(it.id)} />
+              <Print
+                key={it.id}
+                id={it.id}
+                width={it.width}
+                height={it.height}
+                caption={it.photo.caption}
+                pen={penOf(it.photo)}
+                ink={inkOf(it.photo)}
+                doodle={it.photo.doodle}
+                color={it.photo.color}
+                by={it.photo.user_id ? people[it.photo.user_id] : undefined}
+                src={urls[it.photo.thumb_path]}
+                onClick={() => onOpen(it.id)}
+              />
             ) : (
-              <Print key={it.id} id={it.id} width={it.width} height={it.height} caption={it.pending.caption} src={it.pending.preview} fresh>
+              <Print
+                key={it.id}
+                id={it.id}
+                width={it.width}
+                height={it.height}
+                caption={it.pending.caption}
+                pen={it.pending.pen}
+                ink={it.pending.ink}
+                doodle={it.pending.doodle}
+                src={it.pending.preview}
+                fresh
+              >
                 <PendingOverlay p={it.pending} onRetry={() => onRetry(it.id)} onDiscard={() => onDiscard(it.id)} />
               </Print>
             ),
@@ -102,6 +128,9 @@ function Print({
   width,
   height,
   caption,
+  pen,
+  ink,
+  doodle,
   color,
   by,
   src,
@@ -113,6 +142,9 @@ function Print({
   width: number;
   height: number;
   caption?: string | null;
+  pen: Pen;
+  ink: Ink;
+  doodle?: Doodle | null;
   color?: string | null;
   by?: Person;
   src?: string;
@@ -138,11 +170,12 @@ function Print({
       <span className="block" style={{ padding: `${SIDE}px ${SIDE}px 0` }}>
         <span className="relative block" style={{ aspectRatio: `${width} / ${height}` }}>
           <PhotoImg src={src} color={color} className="absolute inset-0" />
+          <DoodleLayer doodle={doodle} width={width} height={height} />
           {children}
         </span>
       </span>
       <span className="flex items-end gap-1.5 px-2" style={{ minHeight: FOOT }}>
-        {caption ? <span className="font-hand line-clamp-3 flex-1 pb-1 pt-1 text-[19px] leading-[1.05] text-print-ink">{caption}</span> : <span className="flex-1" />}
+        {caption ? <Caption text={caption} pen={pen} ink={ink} size={19} className="line-clamp-3 flex-1 pb-1 pt-1 leading-[1.05]" /> : <span className="flex-1" />}
         {by ? <span className="mb-[7px] h-2 w-2 shrink-0 rounded-full opacity-80" style={{ background: by.color }} title={`Added by ${by.display_name}`} /> : null}
       </span>
     </Tag>

@@ -345,3 +345,27 @@ begin
   end if;
   delete from public.collage_push_subs where endpoint = p_endpoint;
 end $$;
+
+-- ---------- caption pens and doodles ----------
+
+-- Which marker the caption is written in, and a freehand drawing over the
+-- photo: { v: 1, strokes: [{ c: "#hex", w: width (fraction of photo width), p: [x, y, x, y, ...] (0..1) }] }
+alter table public.collage_photos
+  add column caption_pen text check (caption_pen in ('pen', 'marker', 'pencil', 'type')),
+  add column caption_ink text check (caption_ink in ('ink', 'blue', 'red', 'green')),
+  add column doodle jsonb check (doodle is null or (jsonb_typeof(doodle) = 'object' and octet_length(doodle::text) <= 120000));
+
+revoke update on public.collage_photos from authenticated;
+grant update (caption, caption_pen, caption_ink, taken_at) on public.collage_photos to authenticated;
+
+-- Anyone on the board can draw on any photo (captions stay the uploader's).
+create function public.collage_set_doodle(p_photo uuid, p_doodle jsonb) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_board uuid;
+begin
+  select board_id into v_board from public.collage_photos where id = p_photo;
+  if v_board is null or not public.collage_is_member(v_board) then raise exception 'You are not on this board'; end if;
+  update public.collage_photos set doodle = p_doodle where id = p_photo;
+end $$;
+revoke execute on function public.collage_set_doodle(uuid, jsonb) from public, anon;
+grant execute on function public.collage_set_doodle(uuid, jsonb) to authenticated;

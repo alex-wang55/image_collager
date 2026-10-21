@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { processPhoto } from "@/lib/image";
 import { rememberLocal } from "@/lib/photos";
+import type { Doodle, Ink, Pen } from "@/lib/pens";
 import { notifyBoard } from "@/lib/push-client";
 import { BUCKET, errMsg, supabase } from "@/lib/supabase";
 import type { Photo } from "@/lib/types";
@@ -13,6 +14,9 @@ export type Pending = {
   boardId: string;
   file: File;
   caption: string;
+  pen: Pen;
+  ink: Ink;
+  doodle: Doodle | null;
   preview: string; // object URL of the original, shown while it uploads
   width: number;
   height: number;
@@ -20,7 +24,7 @@ export type Pending = {
   error?: string;
 };
 
-export type NewPhoto = { file: File; caption: string; width: number; height: number };
+export type NewPhoto = { file: File; caption: string; pen: Pen; ink: Ink; doodle: Doodle | null; width: number; height: number };
 
 type Ctx = {
   pending: Pending[];
@@ -84,6 +88,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           bytes: out.full.size + out.thumb.size,
           color: out.color,
           caption: item.caption.trim() || null,
+          caption_pen: item.caption.trim() ? item.pen : null,
+          caption_ink: item.caption.trim() ? item.ink : null,
+          doodle: item.doodle,
           taken_at: out.takenAt,
         })
         .select()
@@ -138,6 +145,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         boardId,
         file: it.file,
         caption: it.caption,
+        pen: it.pen,
+        ink: it.ink,
+        doodle: it.doodle,
         preview: URL.createObjectURL(it.file),
         width: it.width || 4,
         height: it.height || 5,

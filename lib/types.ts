@@ -1,3 +1,5 @@
+import type { Doodle } from "./pens";
+
 export type Profile = {
   id: string;
   username: string;
@@ -18,6 +20,10 @@ export type Photo = {
   bytes: number;
   color: string | null;
   caption: string | null;
+  /** see lib/pens.ts; null means the default pen in black */
+  caption_pen: string | null;
+  caption_ink: string | null;
+  doodle: Doodle | null;
   taken_at: string | null;
   created_at: string;
   /** taken_at if known, else created_at (generated column) */

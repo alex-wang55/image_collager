@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat } from "next/font/google";
+import { Caveat, Permanent_Marker, Reenie_Beanie, Special_Elite } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth";
 import { UploadProvider } from "@/components/uploads";
 import { ConfirmProvider, PromptProvider, ToastProvider } from "@/components/ui";
 
 const caveat = Caveat({ subsets: ["latin"], weight: ["500", "700"], variable: "--font-caveat", display: "swap" });
+// the other caption pens; only fetched once a caption actually uses one
+const marker = Permanent_Marker({ subsets: ["latin"], weight: "400", variable: "--font-permanent-marker", display: "swap", preload: false });
+const pencil = Reenie_Beanie({ subsets: ["latin"], weight: "400", variable: "--font-reenie", display: "swap", preload: false });
+const typewriter = Special_Elite({ subsets: ["latin"], weight: "400", variable: "--font-special-elite", display: "swap", preload: false });
 
 export const metadata: Metadata = {
   title: "Shoebox",
@@ -28,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={caveat.variable}>
+    <html lang="en" className={`${caveat.variable} ${marker.variable} ${pencil.variable} ${typewriter.variable}`}>
       <body>
         <ToastProvider>
           <ConfirmProvider>

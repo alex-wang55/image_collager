@@ -60,6 +60,9 @@
   /* the phone's own font: SF on iPhone, Roboto on Android */
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-hand: var(--font-caveat), "Bradley Hand", "Segoe Print", cursive;
+  --font-marker: var(--font-permanent-marker), "Marker Felt", "Segoe Print", cursive;
+  --font-pencil: var(--font-reenie), "Bradley Hand", "Segoe Print", cursive;
+  --font-type: var(--font-special-elite), "American Typewriter", "Courier New", monospace;
   --shadow-card: var(--shadow);
   --shadow-print: var(--print-shadow);
 }
