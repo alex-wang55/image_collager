@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase, errMsg } from "@/lib/supabase";
 import { useAuth } from "./auth";
-import { Button, Field, inputCls } from "./ui";
+import { Button, Field, inputCls, useToast } from "./ui";
 import { LogoMark } from "./logo";
 
 export const COLORS = ["#d4452a", "#3f6fd1", "#2f8f6a", "#c4862b", "#8a55c9", "#d0457f", "#2c8c9a", "#6b7a2e"];
@@ -63,6 +63,11 @@ export function LoginForm() {
         <Field label="Password">
           <input className={inputCls} type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
+        <div className="-mt-2 text-right">
+          <Link href="/forgot" className="text-sm font-semibold text-muted hover:text-ink">
+            Forgot password?
+          </Link>
+        </div>
         {err ? <p className="text-sm font-semibold text-danger">{err}</p> : null}
         <Button type="submit" variant="ink" size="lg" className="w-full" loading={busy}>
           Log in
@@ -179,6 +184,129 @@ export function SignupForm() {
           Log in
         </Link>
       </p>
+    </AuthFrame>
+  );
+}
+
+/** Step 1: email a reset link. It lands on /reset, already logged in. */
+export function ForgotForm() {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [sent, setSent] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset` });
+    setBusy(false);
+    if (error) setErr(error.message.toLowerCase().includes("rate limit") ? "Too many tries. Wait an hour and try again." : errMsg(error));
+    else setSent(true);
+  }
+
+  if (sent) {
+    return (
+      <AuthFrame title="Check your email" sub={`If there's an account for ${email.trim()}, a link to set a new password is on its way. It works once and expires in an hour.`}>
+        <p className="text-sm leading-relaxed text-muted">Nothing after a few minutes? Check spam, or try again.</p>
+        <Button variant="soft" size="lg" className="mt-6 w-full" onClick={() => setSent(false)}>
+          Send it again
+        </Button>
+        <p className="mt-6 text-center text-sm text-muted">
+          <Link className="font-semibold text-ink underline decoration-line underline-offset-4" href="/login">
+            Back to log in
+          </Link>
+        </p>
+      </AuthFrame>
+    );
+  }
+
+  return (
+    <AuthFrame title="Forgot your password?" sub="Happens to everyone. We'll email you a link to set a new one.">
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Email">
+          <input className={inputCls} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        {err ? <p className="text-sm font-semibold text-danger">{err}</p> : null}
+        <Button type="submit" variant="ink" size="lg" className="w-full" loading={busy}>
+          Email me a link
+        </Button>
+      </form>
+      <p className="mt-6 text-center text-sm text-muted">
+        Remembered it?{" "}
+        <Link className="font-semibold text-ink underline decoration-line underline-offset-4" href="/login">
+          Log in
+        </Link>
+      </p>
+    </AuthFrame>
+  );
+}
+
+/** Supabase sends a dead or reused link back with the reason in the URL. */
+function linkError(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search);
+  const code = params.get("error_code");
+  if (code === "otp_expired") return "That link has expired or was already used.";
+  return params.get("error_description")?.replace(/\+/g, " ") ?? null;
+}
+
+/**
+ * Step 2: set a new password. Opening the email link logs you in, so this is
+ * also where a logged-in person changes their password from the profile page.
+ */
+export function ResetForm() {
+  const router = useRouter();
+  const { session, loading } = useAuth();
+  const [linkErr] = useState(linkError);
+  const toast = useToast();
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 6) return setErr("Password needs at least 6 characters");
+    setBusy(true);
+    setErr("");
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) return setErr(error.message.includes("different from the old") ? "That's your current password. Pick a new one." : errMsg(error));
+    toast("Password changed");
+    router.replace("/");
+  }
+
+  if (loading) return null;
+
+  if (!session) {
+    return (
+      <AuthFrame title="Link didn't work" sub={linkErr ?? "That link has expired or was already used."}>
+        <Button href="/forgot" variant="ink" size="lg" className="w-full">
+          Send a new link
+        </Button>
+      </AuthFrame>
+    );
+  }
+
+  return (
+    <AuthFrame title="Set a new password" sub={`For ${session.user.email}. You'll use it to log in to Shoebox and Pinky.`}>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="New password" hint="At least 6 characters">
+          <input
+            className={inputCls}
+            type="password"
+            autoComplete="new-password"
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {err ? <p className="text-sm font-semibold text-danger">{err}</p> : null}
+        <Button type="submit" variant="ink" size="lg" className="w-full" loading={busy}>
+          Save password
+        </Button>
+      </form>
     </AuthFrame>
   );
 }

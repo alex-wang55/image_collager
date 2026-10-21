@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth";
 import { COLORS } from "@/components/auth-forms";
@@ -33,7 +32,6 @@ export default function MePage() {
 
 function Me() {
   const { session, profile, refreshProfile } = useAuth();
-  const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(profile?.display_name ?? "");
   const [color, setColor] = useState(profile?.color ?? COLORS[0]);
@@ -65,7 +63,8 @@ function Me() {
 
   async function logout() {
     await supabase.auth.signOut();
-    router.replace("/");
+    // a full load, so the signed-in page's "go log in" redirect can't win the race
+    window.location.replace("/");
   }
 
   const pct = used === null ? 0 : Math.min(100, (used / STORAGE_LIMIT) * 100);
@@ -126,6 +125,9 @@ function Me() {
         <InstallHint />
       </div>
 
+      <Button variant="soft" size="lg" className="mt-2 w-full" href="/reset">
+        Change password
+      </Button>
       <Button variant="soft" size="lg" className="mt-2 w-full" onClick={logout}>
         Log out
       </Button>
