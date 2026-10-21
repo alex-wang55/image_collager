@@ -5,8 +5,9 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth";
 import { Collage } from "@/components/collage";
+import { CollageMaker } from "@/components/collage-maker";
 import { Compose } from "@/components/compose";
-import { IconBack, IconCamera, IconCollage, IconGrid, IconInvite, IconLeave, IconMore, IconPen, IconPhotos, IconTrash } from "@/components/icons";
+import { IconBack, IconCamera, IconCollage, IconGrid, IconImage, IconInvite, IconLeave, IconMore, IconPen, IconPhotos, IconTrash } from "@/components/icons";
 import { InviteSheet } from "@/components/invite";
 import { Shell, useScrolled } from "@/components/shell";
 import { Timeline } from "@/components/timeline";
@@ -54,6 +55,7 @@ function BoardScreen() {
   const [picked, setPicked] = useState<File[]>([]);
   const [menu, setMenu] = useState(false);
   const [invite, setInvite] = useState(false);
+  const [maker, setMaker] = useState(false);
   const [solo, setSolo] = useState<Photo | null>(null); // a deep-linked photo that isn't loaded yet
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
@@ -413,6 +415,11 @@ function BoardScreen() {
                 </span>
               </button>
               <span className="flex-1" />
+              {list.items.length > 1 ? (
+                <IconButton label="Make a collage image" onClick={() => setMaker(true)} className="h-9 w-9 shrink-0 bg-surface-2 text-muted hover:text-ink">
+                  <IconImage size={18} />
+                </IconButton>
+              ) : null}
               <div className="flex shrink-0 rounded-full bg-surface-2 p-0.5" role="tablist" aria-label="View">
                 <ViewTab active={view === "collage"} label="Collage" onClick={() => switchView("collage")}>
                   <IconCollage size={18} />
@@ -451,6 +458,14 @@ function BoardScreen() {
             <Compose files={picked} boardName={board.name} onAdd={addPicked} onCancel={() => setPicked([])} onPickMore={() => library.current?.click()} />
           ) : null}
 
+          <CollageMaker
+            open={maker}
+            onClose={() => setMaker(false)}
+            photos={lists.added.items}
+            title={board.name}
+            subtitle={span ? spanLabel(span.from, span.to) : ""}
+          />
+
           <InviteSheet
             open={invite}
             onClose={() => setInvite(false)}
@@ -467,6 +482,13 @@ function BoardScreen() {
             onClose={() => setMenu(false)}
             title={board.name}
             items={[
+              {
+                label: "Make a collage image",
+                icon: <IconImage size={20} />,
+                onClick: () => setMaker(true),
+                hint: "Turn a few photos into one picture to post",
+                hidden: !lists.added.items.length,
+              },
               { label: "Invite people", icon: <IconInvite size={20} />, onClick: () => setInvite(true), hint: namesLabel(members.map((m) => m.profile!).filter(Boolean), meId) },
               { label: "Rename board", icon: <IconPen size={20} />, onClick: rename },
               { label: "Leave board", icon: <IconLeave size={20} />, onClick: leave, danger: true, hidden: isOwner },
