@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth";
 import { BoardCard, EmptyBoards, InstallHint, MemoryCard, Welcome, isMemory, useBoardCovers } from "@/components/home-parts";
 import { IconPlus } from "@/components/icons";
 import { Wordmark } from "@/components/logo";
+import { PushNudge } from "@/components/notify";
 import { Shell } from "@/components/shell";
 import { Avatar, PageLoader, usePrompt, useToast } from "@/components/ui";
 import { errMsg, supabase } from "@/lib/supabase";
@@ -60,6 +61,9 @@ function Home() {
     router.push(`/b/${data}`);
   }
 
+  // only worth asking about notifications once someone else is on a board with you
+  const friend = boards?.flatMap((b) => b.members).find((m) => m.id !== meId)?.display_name.split(/\s+/)[0];
+
   return (
     <Shell
       wide
@@ -76,6 +80,7 @@ function Home() {
       }
     >
       <InstallHint />
+      {friend ? <PushNudge friend={friend} /> : null}
       {boards === null ? (
         <PageLoader />
       ) : boards.length === 0 ? (

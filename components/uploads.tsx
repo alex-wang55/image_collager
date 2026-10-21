@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { processPhoto } from "@/lib/image";
 import { rememberLocal } from "@/lib/photos";
+import { notifyBoard } from "@/lib/push-client";
 import { BUCKET, errMsg, supabase } from "@/lib/supabase";
 import type { Photo } from "@/lib/types";
 import { useAuth } from "./auth";
@@ -45,6 +46,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const queue = useRef<Pending[]>([]);
   const running = useRef(0);
   const listeners = useRef(new Set<(p: Photo) => void>());
+  const landed = useRef<Record<string, number>>({});
   const uid = session?.user.id;
 
   const sync = () => setPending([...queue.current]);
@@ -112,6 +114,13 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           sync();
           URL.revokeObjectURL(next.preview);
           listeners.current.forEach((l) => l(photo));
+          // one ping per batch, once this board's queue is empty
+          const b = next.boardId;
+          landed.current[b] = (landed.current[b] ?? 0) + 1;
+          if (!queue.current.some((x) => x.boardId === b && x.status !== "failed")) {
+            notifyBoard(b, landed.current[b]);
+            delete landed.current[b];
+          }
         })
         .catch((e) => patch(next.id, { status: "failed", error: errMsg(e) }))
         .finally(() => {

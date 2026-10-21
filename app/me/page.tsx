@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth";
 import { COLORS } from "@/components/auth-forms";
 import { InstallHint } from "@/components/home-parts";
 import { IconBack } from "@/components/icons";
+import { NotifySetting } from "@/components/notify";
 import { Shell } from "@/components/shell";
 import { Avatar, Button, Field, cx, inputCls, useToast } from "@/components/ui";
 import { errMsg, supabase } from "@/lib/supabase";
@@ -102,6 +103,10 @@ function Me() {
             Save
           </Button>
         ) : null}
+      </div>
+
+      <div className="mt-5 rounded-3xl bg-surface p-5 shadow-card ring-1 ring-line/60">
+        <NotifySetting />
       </div>
 
       <div className="mt-5 rounded-3xl bg-surface p-5 shadow-card ring-1 ring-line/60">

@@ -283,3 +283,65 @@ create policy "collage: delete your files, or any as owner" on storage.objects
 -- ---------- realtime: new photos show up live ----------
 
 alter publication supabase_realtime add table public.collage_photos;
+
+-- ---------- push notifications: "Sam added 3 photos to Summer" ----------
+
+create table public.collage_push_subs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text unique not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+create index collage_push_subs_user_idx on public.collage_push_subs (user_id);
+alter table public.collage_push_subs enable row level security;
+create policy "collage: see your push subs" on public.collage_push_subs
+  for select to authenticated using (user_id = (select auth.uid()));
+create policy "collage: drop your push subs" on public.collage_push_subs
+  for delete to authenticated using (user_id = (select auth.uid()));
+revoke insert, update on public.collage_push_subs from anon, authenticated;
+revoke all on public.collage_push_subs from anon;
+
+-- a phone that re-subscribes moves to whoever is logged in on it now
+create function public.collage_save_push_sub(p_endpoint text, p_p256dh text, p_auth text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then raise exception 'Log in first'; end if;
+  insert into public.collage_push_subs (user_id, endpoint, p256dh, auth)
+  values (auth.uid(), p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth;
+end $$;
+revoke execute on function public.collage_save_push_sub(text, text, text) from public, anon;
+grant execute on function public.collage_save_push_sub(text, text, text) to authenticated;
+
+-- The server (app/api/notify) reads subscriptions through these, gated by a
+-- secret that matches PUSH_SECRET in Vercel. Set it with:
+--   insert into private.config (key, value) values ('collage_push_secret', '<PUSH_SECRET>');
+create function public.collage_push_targets(p_secret text, p_board uuid, p_sender uuid) returns json
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if p_secret is distinct from (select value from private.config where key = 'collage_push_secret') then
+    raise exception 'not allowed';
+  end if;
+  if not exists (select 1 from public.collage_members where board_id = p_board and user_id = p_sender) then
+    return null;
+  end if;
+  return json_build_object(
+    'board_name', (select name from public.collage_boards where id = p_board),
+    'sender_name', (select display_name from public.profiles where id = p_sender),
+    'subs', (
+      select coalesce(json_agg(json_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth)), '[]'::json)
+      from public.collage_push_subs s
+      join public.collage_members m on m.user_id = s.user_id
+      where m.board_id = p_board and m.user_id <> p_sender));
+end $$;
+
+create function public.collage_drop_push_sub(p_secret text, p_endpoint text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if p_secret is distinct from (select value from private.config where key = 'collage_push_secret') then
+    raise exception 'not allowed';
+  end if;
+  delete from public.collage_push_subs where endpoint = p_endpoint;
+end $$;
