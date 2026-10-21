@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f2eee6;
+  --surface: #faf8f3;
+  --surface-2: #e9e3d7;
+  --ink: #211d17;
+  --muted: #776f62;
+  --line: #ded6c7;
+  --accent: #d4452a;
+  --accent-ink: #ffffff;
+  --accent-soft: #f6ddd5;
+  --danger: #b8321c;
+  /* photo prints stay light in both themes, like real paper */
+  --print: #fffdf9;
+  --print-ink: #2a251e;
+  --print-muted: #8a8174;
+  --tape: rgb(236 222 186 / 0.78);
+  --shadow: 0 1px 2px rgb(50 36 20 / 0.06), 0 10px 28px -14px rgb(50 36 20 / 0.22);
+  --print-shadow: 0 1px 1px rgb(50 36 20 / 0.1), 0 6px 16px -8px rgb(50 36 20 / 0.35);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15130f;
+    --surface: #1e1b16;
+    --surface-2: #29251e;
+    --ink: #f0ebe1;
+    --muted: #a39a8b;
+    --line: #2f2a22;
+    --accent: #f26a4b;
+    --accent-ink: #1b0c07;
+    --accent-soft: #3a1d15;
+    --danger: #ff7a5e;
+    --print: #ece6da;
+    --print-ink: #2a251e;
+    --print-muted: #7c7366;
+    --tape: rgb(226 210 170 / 0.42);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 28px -14px rgb(0 0 0 / 0.6);
+    --print-shadow: 0 1px 1px rgb(0 0 0 / 0.4), 0 8px 18px -8px rgb(0 0 0 / 0.75);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-print: var(--print);
+  --color-print-ink: var(--print-ink);
+  --color-print-muted: var(--print-muted);
+  /* the phone's own font: SF on iPhone, Roboto on Android */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-hand: var(--font-caveat), "Bradley Hand", "Segoe Print", cursive;
+  --shadow-card: var(--shadow);
+  --shadow-print: var(--print-shadow);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+@layer base {
+  /* stops iOS zooming in on focus; in the base layer so text-* utilities can still go bigger */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* a strip of masking tape across the top of a print */
+.tape {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 64px;
+  height: 20px;
+  background: var(--tape);
+  /* torn ends */
+  clip-path: polygon(0 10%, 5% 0, 95% 6%, 100% 0, 97% 50%, 100% 100%, 94% 92%, 6% 100%, 0 92%, 3% 48%);
+  pointer-events: none;
+}
+
+/* subtle paper grain on the page background */
+.paper {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgb(120 100 70 / 0.05) 1px, transparent 1px);
+  background-size: 5px 5px;
+}
+@media (prefers-color-scheme: dark) {
+  .paper {
+    background-image: radial-gradient(rgb(255 240 210 / 0.025) 1px, transparent 1px);
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.animate-rise {
+  animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.animate-sheet {
+  animation: sheet-in 0.34s cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes drop {
+  0% {
+    transform: translateY(-14px) rotate(var(--tilt, 0deg)) scale(1.04);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(var(--tilt, 0deg));
+    opacity: 1;
+  }
+}
+.animate-drop {
+  animation: drop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-sheet,
+  .animate-fade,
+  .animate-drop {
+    animation: none;
+  }
+}
