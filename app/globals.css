@@ -63,6 +63,7 @@
   --font-marker: var(--font-permanent-marker), "Marker Felt", "Segoe Print", cursive;
   --font-pencil: var(--font-reenie), "Bradley Hand", "Segoe Print", cursive;
   --font-type: var(--font-special-elite), "American Typewriter", "Courier New", monospace;
+  --font-comic: "Comic Sans MS", "Comic Sans", var(--font-comic-neue), cursive;
   --shadow-card: var(--shadow);
   --shadow-print: var(--print-shadow);
 }
@@ -192,4 +193,72 @@ body {
   .animate-drop {
     animation: none;
   }
+}
+
+/* ---------- bulletin board ---------- */
+
+:root {
+  --cork: #c79b6a;
+  --cork-dark: rgb(96 60 28 / 0.32);
+  --cork-light: rgb(255 238 205 / 0.28);
+  --frame: #8a5a32;
+  --frame-hi: #a87443;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cork: #7b5a3c;
+    --cork-dark: rgb(30 18 8 / 0.4);
+    --cork-light: rgb(255 228 190 / 0.12);
+    --frame: #4a3020;
+    --frame-hi: #5c3c27;
+  }
+}
+
+/* cork: speckles at three scales over a warm base, inside a wooden frame */
+.cork {
+  background-color: var(--cork);
+  background-image:
+    radial-gradient(var(--cork-dark) 0.8px, transparent 1.4px),
+    radial-gradient(var(--cork-light) 0.8px, transparent 1.4px),
+    radial-gradient(var(--cork-dark) 1.4px, transparent 2.2px),
+    radial-gradient(ellipse at 30% 20%, rgb(255 240 210 / 0.18), transparent 60%);
+  background-size: 6px 6px, 9px 9px, 23px 23px, 100% 100%;
+  background-position: 0 0, 3px 4px, 7px 11px, 0 0;
+  border: 8px solid var(--frame);
+  border-top-color: var(--frame-hi);
+  border-left-color: var(--frame-hi);
+  box-shadow: inset 0 2px 10px rgb(0 0 0 / 0.28), 0 10px 30px -14px rgb(40 20 5 / 0.55);
+}
+
+/* a pushpin holding the top of a print or note */
+.pin {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  margin-left: -7.5px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.85) 0 12%, var(--pin) 32%, color-mix(in srgb, var(--pin) 60%, black) 100%);
+  box-shadow: 0 2px 2px rgb(0 0 0 / 0.35), 3px 5px 5px -1px rgb(0 0 0 / 0.25);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* sticky note with a lifted bottom corner */
+.sticky-note {
+  position: relative;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.12), 0 8px 14px -8px rgb(0 0 0 / 0.45);
+}
+.sticky-note::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18%;
+  height: 18%;
+  max-width: 22px;
+  max-height: 22px;
+  background: linear-gradient(135deg, rgb(0 0 0 / 0.14), transparent 55%);
+  pointer-events: none;
 }

@@ -11,14 +11,17 @@ export function seeded(id: string, salt = 0): number {
   return (h >>> 0) / 4294967296;
 }
 
-/** How a print sits on the board: a slight tilt, a nudge sideways, sometimes a strip of tape. */
+export const PINS = ["#d63a2f", "#2f6fd6", "#f2b632", "#2f9a62", "#f4f1ea", "#8a4fd0"];
+
+/** How a print sits on the board: a slight tilt, a nudge sideways, and either a strip of tape or a pushpin. */
 export function printStyle(id: string) {
   const r = seeded(id);
   const tilt = (r - 0.5) * 4.4; // -2.2deg .. 2.2deg
   const nudge = (seeded(id, 1) - 0.5) * 6; // -3px .. 3px
   const t = seeded(id, 2);
   const tape = t < 0.38 ? { at: (seeded(id, 3) - 0.5) * 40, tilt: (seeded(id, 4) - 0.5) * 16 } : null;
-  return { tilt, nudge, tape };
+  const pin = tape ? null : PINS[Math.floor(seeded(id, 5) * PINS.length)];
+  return { tilt, nudge, tape, pin };
 }
 
 export type Sized = { id: string; width: number; height: number; extra?: number };

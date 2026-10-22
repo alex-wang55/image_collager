@@ -145,3 +145,19 @@ export const IconScribble = ({ size, ...p }: P) => (
     <path d="M3.5 17c2.5-6 5-9 6.5-8.5 2 .7-2.5 7.5-.5 8.2 1.8.6 4-6.4 6.2-5.8 1.6.4-.6 4.6.8 5.2 1 .4 2.3-1 4-3" />
   </svg>
 );
+export const IconComment = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M5 18.5V6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7a2.5 2.5 0 0 1-2.5 2.5H9.2a1 1 0 0 0-.6.2z" />
+  </svg>
+);
+export const IconNote = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M5 4.5h14v9.5l-5.5 5.5H5z" />
+    <path d="M13.5 19.5V14h5.5" />
+  </svg>
+);
+export const IconSend = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </svg>
+);

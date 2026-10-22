@@ -369,3 +369,85 @@ begin
 end $$;
 revoke execute on function public.collage_set_doodle(uuid, jsonb) from public, anon;
 grant execute on function public.collage_set_doodle(uuid, jsonb) to authenticated;
+
+-- ---------- comments, sticky notes, comic sans ----------
+
+alter table public.collage_photos drop constraint collage_photos_caption_pen_check;
+alter table public.collage_photos add constraint collage_photos_caption_pen_check
+  check (caption_pen in ('pen', 'marker', 'pencil', 'type', 'comic'));
+
+-- kept up to date by a trigger, so a count change reaches everyone through realtime
+alter table public.collage_photos add column comment_count int not null default 0;
+
+-- a thread under each photo
+create table public.collage_comments (
+  id uuid primary key default gen_random_uuid(),
+  photo_id uuid not null references public.collage_photos(id) on delete cascade,
+  board_id uuid not null references public.collage_boards(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete set null,
+  body text not null check (char_length(trim(body)) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+create index collage_comments_photo_idx on public.collage_comments (photo_id, created_at);
+create index collage_comments_board_idx on public.collage_comments (board_id);
+create index collage_comments_user_idx on public.collage_comments (user_id);
+
+-- sticky notes: stuck to the side of a photo, or pinned loose on the board (photo_id null)
+create table public.collage_notes (
+  id uuid primary key default gen_random_uuid(),
+  board_id uuid not null references public.collage_boards(id) on delete cascade,
+  photo_id uuid references public.collage_photos(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete set null,
+  body text not null check (char_length(trim(body)) between 1 and 200),
+  color text not null default 'yellow' check (color in ('yellow', 'pink', 'blue', 'green')),
+  pen text not null default 'pen' check (pen in ('pen', 'marker', 'pencil', 'type', 'comic')),
+  ink text not null default 'ink' check (ink in ('ink', 'blue', 'red', 'green')),
+  created_at timestamptz not null default now()
+);
+create index collage_notes_board_idx on public.collage_notes (board_id, created_at);
+create index collage_notes_photo_idx on public.collage_notes (photo_id);
+create index collage_notes_user_idx on public.collage_notes (user_id);
+
+alter table public.collage_comments enable row level security;
+alter table public.collage_notes enable row level security;
+
+create policy "collage: members read comments" on public.collage_comments
+  for select to authenticated using (public.collage_is_member(board_id));
+create policy "collage: members comment" on public.collage_comments
+  for insert to authenticated with check (
+    user_id = (select auth.uid()) and public.collage_is_member(board_id)
+    and exists (select 1 from public.collage_photos p where p.id = photo_id and p.board_id = collage_comments.board_id));
+create policy "collage: delete your comments, or any as owner" on public.collage_comments
+  for delete to authenticated using (user_id = (select auth.uid()) or public.collage_is_owner(board_id));
+
+create policy "collage: members read notes" on public.collage_notes
+  for select to authenticated using (public.collage_is_member(board_id));
+create policy "collage: members leave notes" on public.collage_notes
+  for insert to authenticated with check (
+    user_id = (select auth.uid()) and public.collage_is_member(board_id)
+    and (photo_id is null or exists (select 1 from public.collage_photos p where p.id = photo_id and p.board_id = collage_notes.board_id)));
+create policy "collage: edit your notes" on public.collage_notes
+  for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy "collage: delete your notes, or any as owner" on public.collage_notes
+  for delete to authenticated using (user_id = (select auth.uid()) or public.collage_is_owner(board_id));
+
+revoke all on public.collage_comments, public.collage_notes from anon;
+revoke update on public.collage_comments from authenticated;
+revoke update on public.collage_notes from authenticated;
+grant update (body, color, pen, ink) on public.collage_notes to authenticated;
+
+create function public.collage_count_comments() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.collage_photos set comment_count = comment_count + 1 where id = new.photo_id;
+  else
+    update public.collage_photos set comment_count = greatest(0, comment_count - 1) where id = old.photo_id;
+  end if;
+  return null;
+end $$;
+create trigger collage_comments_count after insert or delete on public.collage_comments
+  for each row execute function public.collage_count_comments();
+revoke execute on function public.collage_count_comments() from public, anon, authenticated;
+
+alter publication supabase_realtime add table public.collage_comments, public.collage_notes;

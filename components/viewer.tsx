@@ -4,9 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { longDate, shortDate } from "@/lib/dates";
 import { signUrls } from "@/lib/photos";
-import type { Person, Photo } from "@/lib/types";
+import type { Note, Person, Photo } from "@/lib/types";
 import { inkOf, penOf } from "@/lib/pens";
-import { IconClose, IconDownload, IconMore, IconPen, IconScribble, IconShare, IconStar, IconTrash } from "./icons";
+import { IconClose, IconComment, IconDownload, IconMore, IconNote, IconPen, IconScribble, IconShare, IconStar, IconTrash } from "./icons";
+import { StickyNote } from "./notes";
 import { Caption, DoodleLayer } from "./pen";
 import { useSigned } from "./photo-img";
 import { ActionSheet, Avatar, cx, useToast, type MenuItem } from "./ui";
@@ -26,9 +27,22 @@ type Props = {
   onEditCaption: (p: Photo) => void;
   onMakeCover: (p: Photo) => void;
   onDraw: (p: Photo) => void;
-  /** something is open on top (drawing, caption): ignore the arrow and escape keys */
+  onComments: (p: Photo) => void;
+  onAddNote: (p: Photo) => void;
+  onOpenNote: (n: Note) => void;
+  /** sticky notes stuck to each photo, by photo id */
+  notesByPhoto: Record<string, Note[]>;
+  /** something is open on top (drawing, caption, comments): ignore the arrow and escape keys */
   paused?: boolean;
 };
+
+function ActionButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 active:bg-white/20">
+      {children}
+    </button>
+  );
+}
 
 /** Full-screen photos. Swipe sideways to flip through, swipe down (or tap ×) to close. */
 export function Viewer(props: Props) {
@@ -141,11 +155,13 @@ export function Viewer(props: Props) {
   }
 
   if (!photo) return null;
+  const notes = props.notesByPhoto[photo.id] ?? [];
   const by = photo.user_id ? people[photo.user_id] : undefined;
   const mine = photo.user_id === meId;
   const items: MenuItem[] = [
     { label: photo.caption ? "Edit caption" : "Add a caption", icon: <IconPen size={20} />, onClick: () => props.onEditCaption(photo), hidden: !mine, hint: "Pick the marker too" },
     { label: photo.doodle ? "Edit the drawing" : "Draw on it", icon: <IconScribble size={20} />, onClick: () => props.onDraw(photo), hint: "Anyone on the board can" },
+    { label: "Stick a note on it", icon: <IconNote size={20} />, onClick: () => props.onAddNote(photo), hint: "Shows on the side of the photo" },
     { label: coverId === photo.id ? "This is the cover" : "Make it the cover", icon: <IconStar size={20} />, onClick: () => props.onMakeCover(photo), hint: "Shows on the board in your list" },
     { label: "Save to phone", icon: <IconDownload size={20} />, onClick: share },
     { label: "Delete photo", icon: <IconTrash size={20} />, onClick: () => props.onDelete(photo), danger: true, hidden: !(mine || isOwner) },
@@ -203,33 +219,48 @@ export function Viewer(props: Props) {
           chrome && !dragY ? "opacity-100" : "opacity-0",
         )}
       >
-        <div className="pointer-events-auto mx-auto flex max-w-2xl items-end gap-3 px-5">
-          <div className="min-w-0 flex-1">
-            {photo.caption ? (
-              <p className="mb-1.5 leading-[1.1]">
-                <Caption text={photo.caption} pen={penOf(photo)} ink={inkOf(photo)} size={26} light />
-              </p>
-            ) : null}
-            <div className="flex items-center gap-2 text-[13px] text-white/75">
-              {by ? <Avatar person={by} size={20} /> : null}
-              <span className="truncate">
-                {by ? `${by.id === meId ? "You" : by.display_name.split(/\s+/)[0]} · ` : ""}
-                {photo.taken_at ? longDate(photo.taken_at) : `Added ${shortDate(photo.created_at)}`}
-              </span>
+        <div className="pointer-events-auto mx-auto max-w-2xl px-5">
+          {notes.length ? (
+            <div className="no-scrollbar -mx-5 mb-3 flex gap-3 overflow-x-auto px-5 pb-1 pt-2">
+              {notes.map((n) => (
+                <button key={n.id} type="button" onClick={() => props.onOpenNote(n)} className="shrink-0 text-left active:scale-95" aria-label="Open note">
+                  <StickyNote note={n} variant="mini" />
+                </button>
+              ))}
             </div>
+          ) : null}
+          {photo.caption ? (
+            <p className="mb-1.5 leading-[1.1]">
+              <Caption text={photo.caption} pen={penOf(photo)} ink={inkOf(photo)} size={26} light />
+            </p>
+          ) : null}
+          <div className="flex items-center gap-2 text-[13px] text-white/75">
+            {by ? <Avatar person={by} size={20} /> : null}
+            <span className="truncate">
+              {by ? `${by.id === meId ? "You" : by.display_name.split(/\s+/)[0]} · ` : ""}
+              {photo.taken_at ? longDate(photo.taken_at) : `Added ${shortDate(photo.created_at)}`}
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={() => props.onDraw(photo)}
-            aria-label="Draw on it"
-            title="Draw on it"
-            className="mb-[-6px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 active:bg-white/20"
-          >
-            <IconScribble />
-          </button>
-          <button type="button" onClick={share} aria-label="Share" className="mb-[-6px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 active:bg-white/20">
-            <IconShare />
-          </button>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => props.onComments(photo)}
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-white/12 px-4 text-sm font-semibold active:bg-white/20"
+            >
+              <IconComment size={20} />
+              {photo.comment_count ? `${photo.comment_count}` : "Comment"}
+            </button>
+            <ActionButton label="Stick a note on it" onClick={() => props.onAddNote(photo)}>
+              <IconNote />
+            </ActionButton>
+            <ActionButton label="Draw on it" onClick={() => props.onDraw(photo)}>
+              <IconScribble />
+            </ActionButton>
+            <span className="flex-1" />
+            <ActionButton label="Share" onClick={share}>
+              <IconShare />
+            </ActionButton>
+          </div>
         </div>
       </div>
 

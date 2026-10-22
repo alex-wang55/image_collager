@@ -4,6 +4,7 @@ export const PENS = {
   marker: { label: "Marker", cls: "font-marker", scale: 0.78 },
   pencil: { label: "Pencil", cls: "font-pencil", scale: 1.12 },
   type: { label: "Typewriter", cls: "font-type", scale: 0.68 },
+  comic: { label: "Comic Sans", cls: "font-comic", scale: 0.74 },
 } as const;
 export type Pen = keyof typeof PENS;
 

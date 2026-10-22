@@ -8,8 +8,10 @@ import { Collage } from "@/components/collage";
 import { CollageMaker } from "@/components/collage-maker";
 import { DoodleEditor } from "@/components/doodle-editor";
 import { CaptionSheet } from "@/components/pen";
+import { CommentsSheet } from "@/components/comments";
+import { NoteSheet } from "@/components/notes";
 import { Compose } from "@/components/compose";
-import { IconBack, IconCamera, IconCollage, IconGrid, IconImage, IconInvite, IconLeave, IconMore, IconPen, IconPhotos, IconTrash } from "@/components/icons";
+import { IconBack, IconCamera, IconCollage, IconGrid, IconImage, IconInvite, IconLeave, IconMore, IconNote, IconPen, IconPhotos, IconTrash } from "@/components/icons";
 import { InviteSheet } from "@/components/invite";
 import { Shell, useScrolled } from "@/components/shell";
 import { Timeline } from "@/components/timeline";
@@ -20,7 +22,7 @@ import { spanLabel } from "@/lib/dates";
 import { deletePhotos, fetchPhotos, signUrls, sortPhotos, type Order, PAGE } from "@/lib/photos";
 import { inkOf, lastPen, penOf, type Doodle, type Ink, type Pen } from "@/lib/pens";
 import { errMsg, supabase } from "@/lib/supabase";
-import type { Board, Member, Person, Photo } from "@/lib/types";
+import type { Board, Member, Note, Person, Photo } from "@/lib/types";
 
 type View = "collage" | "timeline";
 type List = { items: Photo[]; done: boolean; loading: boolean };
@@ -61,6 +63,9 @@ function BoardScreen() {
   const [maker, setMaker] = useState(false);
   const [captionFor, setCaptionFor] = useState<Photo | null>(null);
   const [drawFor, setDrawFor] = useState<{ photo: Photo; src: string } | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteSheet, setNoteSheet] = useState<{ photoId: string | null; note: Note | null } | null>(null);
+  const [commentsFor, setCommentsFor] = useState<Photo | null>(null);
   const [solo, setSolo] = useState<Photo | null>(null); // a deep-linked photo that isn't loaded yet
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
@@ -104,18 +109,31 @@ function BoardScreen() {
   }, [id]);
 
   const loadMeta = useCallback(async () => {
-    const [b, c, first, last] = await Promise.all([
+    const [b, c, first, last, n] = await Promise.all([
       supabase.from("collage_boards").select("*").eq("id", id).maybeSingle(),
       supabase.from("collage_photos").select("id", { count: "exact", head: true }).eq("board_id", id),
       supabase.from("collage_photos").select("shot_at").eq("board_id", id).order("shot_at").limit(1).maybeSingle(),
       supabase.from("collage_photos").select("shot_at").eq("board_id", id).order("shot_at", { ascending: false }).limit(1).maybeSingle(),
+      // notes are small and few, so the whole board's worth comes in one go
+      supabase.from("collage_notes").select("*").eq("board_id", id).order("created_at"),
       loadMembers(),
     ]);
     if (b.error) return toast(errMsg(b.error), "err");
     setBoard((b.data as Board) ?? null);
     setCount(c.count ?? 0);
     setSpan(first.data && last.data ? { from: first.data.shot_at, to: last.data.shot_at } : null);
+    setNotes((n.data as Note[]) ?? []);
   }, [id, toast, loadMembers]);
+
+  const upsertNote = useCallback((note: Note) => {
+    setNotes((list) => {
+      const i = list.findIndex((x) => x.id === note.id);
+      if (i < 0) return [...list, note];
+      const next = [...list];
+      next[i] = note;
+      return next;
+    });
+  }, []);
 
   const listsRef = useRef(lists);
   listsRef.current = lists;
@@ -222,12 +240,37 @@ function BoardScreen() {
         dropPhotos([gone]);
         setCount((c) => Math.max(0, c - 1));
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "collage_notes", filter: `board_id=eq.${id}` }, ({ new: row }) => {
+        upsertNote(row as Note);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "collage_notes", filter: `board_id=eq.${id}` }, ({ new: row }) => {
+        upsertNote(row as Note);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "collage_notes" }, ({ old }) => {
+        const gone = (old as { id?: string }).id;
+        if (gone) setNotes((list) => (list.some((n) => n.id === gone) ? list.filter((n) => n.id !== gone) : list));
+      })
       .subscribe();
     return () => {
       clearTimeout(seenTimer);
       supabase.removeChannel(ch);
     };
-  }, [id, meId, addPhoto, patchPhoto, dropPhotos, loadMembers]);
+  }, [id, meId, addPhoto, patchPhoto, dropPhotos, loadMembers, upsertNote]);
+
+  /* ---------- sticky notes ---------- */
+
+  const notesByPhoto = useMemo(() => {
+    const m: Record<string, Note[]> = {};
+    for (const n of notes) if (n.photo_id) (m[n.photo_id] ??= []).push(n);
+    return m;
+  }, [notes]);
+
+  // loose notes sit among the photos by date, so only show the ones inside the stretch we've loaded
+  const looseNotes = useMemo(() => {
+    const loaded = lists.added;
+    const oldest = loaded.items[loaded.items.length - 1];
+    return notes.filter((n) => !n.photo_id && (loaded.done || !oldest || n.created_at >= oldest.created_at));
+  }, [notes, lists.added]);
 
   /* ---------- viewer (open photo lives in ?p= so back closes it) ---------- */
 
@@ -237,6 +280,14 @@ function BoardScreen() {
     return solo?.id === openId ? [solo] : [];
   }, [openId, list.items, solo]);
   const viewerIndex = viewerPhotos.findIndex((p) => p.id === openId);
+
+  // a comment notification links to ?p=<photo>&c=1: open that photo's thread
+  const wantComments = search.get("c") === "1";
+  useEffect(() => {
+    if (!wantComments || viewerIndex < 0) return;
+    setCommentsFor(viewerPhotos[viewerIndex]);
+    window.history.replaceState(null, "", `${pathname}?p=${openId}`);
+  }, [wantComments, viewerIndex, viewerPhotos, pathname, openId]);
 
   // a link straight to a photo we haven't paged to yet
   useEffect(() => {
@@ -301,6 +352,8 @@ function BoardScreen() {
         dropPhotos([p.id]);
         setCount((c) => Math.max(0, c - 1));
       }
+      // its notes went with it
+      setNotes((list) => list.filter((n) => n.photo_id !== p.id));
       if (board?.cover_photo_id === p.id) setBoard((b) => (b ? { ...b, cover_photo_id: null } : b));
     } catch (e) {
       toast(errMsg(e), "err");
@@ -449,10 +502,20 @@ function BoardScreen() {
             </div>
           </div>
 
-          {count === 0 && !pending.length && list.done ? (
+          {count === 0 && !pending.length && list.done && !looseNotes.length ? (
             <EmptyBoard canInvite={!others.length} onInvite={() => setInvite(true)} />
           ) : view === "collage" ? (
-            <Collage photos={list.items} pending={pending} people={people} onOpen={openPhoto} onRetry={uploads.retry} onDiscard={uploads.discard} />
+            <Collage
+              photos={list.items}
+              pending={pending}
+              notes={looseNotes}
+              notesByPhoto={notesByPhoto}
+              people={people}
+              onOpen={openPhoto}
+              onOpenNote={(n) => setNoteSheet({ photoId: n.photo_id, note: n })}
+              onRetry={uploads.retry}
+              onDiscard={uploads.discard}
+            />
           ) : (
             <>
               {pending.length ? <p className="mb-3 px-1 text-sm text-muted">Adding {pending.length} photo{pending.length === 1 ? "" : "s"}...</p> : null}
@@ -468,7 +531,11 @@ function BoardScreen() {
           ) : null}
           {list.done && list.items.length > 12 ? <p className="font-hand py-10 text-center text-2xl text-muted">that&apos;s everything</p> : null}
 
-          <CaptureBar onCamera={() => camera.current?.click()} onLibrary={() => library.current?.click()} />
+          <CaptureBar
+            onCamera={() => camera.current?.click()}
+            onLibrary={() => library.current?.click()}
+            onNote={() => setNoteSheet({ photoId: null, note: null })}
+          />
           <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
           <input ref={library} type="file" accept="image/*" multiple hidden onChange={onPick} />
 
@@ -530,7 +597,11 @@ function BoardScreen() {
               onEditCaption={setCaptionFor}
               onMakeCover={makeCover}
               onDraw={openDrawing}
-              paused={!!drawFor || !!captionFor}
+              onComments={setCommentsFor}
+              onAddNote={(p) => setNoteSheet({ photoId: p.id, note: null })}
+              onOpenNote={(n) => setNoteSheet({ photoId: n.photo_id, note: n })}
+              notesByPhoto={notesByPhoto}
+              paused={!!drawFor || !!captionFor || !!commentsFor || !!noteSheet}
             />
           ) : null}
 
@@ -543,6 +614,26 @@ function BoardScreen() {
             }
             onClose={() => setCaptionFor(null)}
             onSave={(text, pen, ink) => (captionFor ? saveCaption(captionFor, text, pen, ink) : undefined)}
+          />
+
+          <CommentsSheet photo={commentsFor} onClose={() => setCommentsFor(null)} people={people} meId={meId} isOwner={isOwner} />
+
+          <NoteSheet
+            open={!!noteSheet}
+            boardId={id}
+            photoId={noteSheet?.photoId ?? null}
+            note={noteSheet?.note ?? null}
+            meId={meId}
+            isOwner={isOwner}
+            onClose={() => setNoteSheet(null)}
+            onSaved={(n) => {
+              upsertNote(n);
+              setNoteSheet(null);
+            }}
+            onDeleted={(noteId) => {
+              setNotes((list) => list.filter((x) => x.id !== noteId));
+              setNoteSheet(null);
+            }}
           />
 
           {drawFor ? (
@@ -585,15 +676,24 @@ function PageLoaderSmall() {
   );
 }
 
-/** Camera front and centre, library beside it. */
-function CaptureBar({ onCamera, onLibrary }: { onCamera: () => void; onLibrary: () => void }) {
+/** Camera front and centre, with the library and a sticky note beside it. */
+function CaptureBar({ onCamera, onLibrary, onNote }: { onCamera: () => void; onLibrary: () => void; onNote: () => void }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-surface/90 p-2 pr-2 shadow-[0_10px_30px_-10px_rgb(0_0_0/0.35)] ring-1 ring-line/70 backdrop-blur-md">
+      <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-surface/90 p-2 pr-2 shadow-[0_10px_30px_-10px_rgb(0_0_0/0.35)] ring-1 ring-line/70 backdrop-blur-md">
+        <button
+          type="button"
+          onClick={onNote}
+          aria-label="Pin a note to the board"
+          title="Pin a note to the board"
+          className="flex h-14 w-14 items-center justify-center rounded-full transition hover:bg-surface-2 active:scale-95"
+        >
+          <IconNote size={22} />
+        </button>
         <button
           type="button"
           onClick={onLibrary}
-          className="flex h-14 items-center gap-2 rounded-full px-5 text-[15px] font-semibold transition hover:bg-surface-2 active:scale-95"
+          className="flex h-14 items-center gap-2 rounded-full px-4 text-[15px] font-semibold transition hover:bg-surface-2 active:scale-95"
         >
           <IconPhotos size={22} /> Library
         </button>

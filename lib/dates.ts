@@ -50,3 +50,13 @@ export function ago(iso: string): string {
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
+
+/** Chat-style stamp: "now", "5m", "3h", "2d", then the date. */
+export function timeAgo(iso: string): string {
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d`;
+  return shortDate(iso);
+}

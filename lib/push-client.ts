@@ -54,15 +54,20 @@ export async function turnOffPush(): Promise<void> {
   await sub.unsubscribe();
 }
 
-/** Tell everyone else on the board that photos landed. Fire and forget. */
-export async function notifyBoard(boardId: string, count: number): Promise<void> {
+export type Ping =
+  | { kind: "photos"; count: number }
+  | { kind: "comment"; photoId: string; text: string }
+  | { kind: "note"; photoId: string | null; text: string };
+
+/** Tell everyone else on the board that something landed. Fire and forget. */
+export async function notifyBoard(boardId: string, ping: Ping): Promise<void> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token || count < 1) return;
+  if (!token) return;
   await fetch("/api/notify", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ boardId, count }),
+    body: JSON.stringify({ boardId, ...ping }),
     keepalive: true,
   }).catch(() => {});
 }

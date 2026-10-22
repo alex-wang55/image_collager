@@ -125,7 +125,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           const b = next.boardId;
           landed.current[b] = (landed.current[b] ?? 0) + 1;
           if (!queue.current.some((x) => x.boardId === b && x.status !== "failed")) {
-            notifyBoard(b, landed.current[b]);
+            notifyBoard(b, { kind: "photos", count: landed.current[b] });
             delete landed.current[b];
           }
         })
